@@ -41,6 +41,10 @@ def score_ticker(ticker: dict) -> Signal | None:
     if volume_usdt < config.MIN_VOLUME_USDT:
         return None
 
+    # Skip coins in freefall — likely delisting, hack, or rug pull, not a bounce
+    if change_24h < config.MAX_DROP_24H:
+        return None
+
     # Fetch 1h candles for indicators
     try:
         df_1h = get_klines(symbol, "1h", limit=60)
