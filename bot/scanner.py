@@ -13,6 +13,13 @@ from bot.alerts import dispatch
 from bot import config
 from bot.trader import execute_buy
 
+# Optional dashboard integration (imported lazily to avoid circular deps)
+_dashboard = None
+
+def set_dashboard(dash):
+    global _dashboard
+    _dashboard = dash
+
 _alerted_this_cycle: set[str] = set()
 _last_alerted: dict[str, float] = {}
 COOLDOWN_SECONDS = 3600
@@ -68,6 +75,23 @@ def run_scan(min_score: int = 30, auto_trade: bool = False) -> list[Signal]:
         dispatch(sig, reasoning, min_score=min_score)
         if auto_trade:
             execute_buy(sig)
+        if _dashboard:
+            _dashboard.push_signal({
+                "symbol": sig.symbol,
+                "score": sig.score,
+                "change_24h": sig.change_24h,
+                "change_1h": sig.change_1h,
+                "rsi_1h": sig.rsi_1h,
+                "vol_surge_1h": sig.vol_surge_1h,
+                "signal_types": sig.signal_types,
+                "price": sig.price,
+            })
+
+    if _dashboard:
+        _dashboard.update_state(
+            last_scan=datetime.utcnow().isoformat(),
+            last_scan_count=len(found),
+        )
 
     return found
 

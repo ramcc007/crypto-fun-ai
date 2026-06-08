@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crypto Bot Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0b0e11; color: #eaecef; font-family: 'Segoe UI', sans-serif; font-size: 14px; }
+
+  header {
+    background: #161a1e;
+    border-bottom: 1px solid #2b2f36;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 18px; color: #f0b90b; letter-spacing: 1px; }
+  .badge {
+    padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  }
+  .badge-dry  { background: #2d3748; color: #f6c90e; }
+  .badge-live { background: #1a3a2a; color: #0ecb81; }
+  .badge-idle { background: #2b2f36; color: #848e9c; }
+
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 20px 24px 0; }
+  .card {
+    background: #161a1e;
+    border: 1px solid #2b2f36;
+    border-radius: 8px;
+    padding: 16px 20px;
+  }
+  .card-label { color: #848e9c; font-size: 12px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .card-value { font-size: 24px; font-weight: 700; }
+  .card-sub   { color: #848e9c; font-size: 12px; margin-top: 4px; }
+
+  .green  { color: #0ecb81; }
+  .red    { color: #f6465d; }
+  .yellow { color: #f0b90b; }
+  .gray   { color: #848e9c; }
+
+  section { padding: 20px 24px; }
+  section h2 { font-size: 15px; color: #848e9c; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; border-bottom: 1px solid #2b2f36; padding-bottom: 8px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { color: #848e9c; font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 12px; text-align: left; border-bottom: 1px solid #2b2f36; }
+  td { padding: 10px 12px; border-bottom: 1px solid #1e2329; font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #1e2329; }
+
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600; margin: 1px;
+  }
+  .tag-dip     { background: #2d1b1b; color: #f6465d; }
+  .tag-oversold{ background: #1b2d2b; color: #0ecb81; }
+  .tag-volume  { background: #2d2b1b; color: #f0b90b; }
+  .tag-macd    { background: #1b1f2d; color: #7b9ef6; }
+  .tag-ema     { background: #241b2d; color: #c97bf6; }
+  .tag-bb      { background: #2d2b1b; color: #e8b84b; }
+  .tag-default { background: #2b2f36; color: #848e9c; }
+
+  .score-bar-wrap { background: #2b2f36; border-radius: 4px; height: 6px; width: 80px; display: inline-block; vertical-align: middle; margin-left: 6px; }
+  .score-bar { height: 6px; border-radius: 4px; }
+
+  .empty { color: #848e9c; text-align: center; padding: 32px; font-size: 13px; }
+
+  .refresh-info { color: #848e9c; font-size: 11px; text-align: right; padding: 8px 24px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 24px 20px; }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>&#9889; Crypto Bot Dashboard</h1>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span id="mode-badge" class="badge badge-idle">Loading...</span>
+    <span id="last-update" style="color:#848e9c;font-size:12px;"></span>
+  </div>
+</header>
+
+<!-- Stats row -->
+<div class="grid">
+  <div class="card">
+    <div class="card-label">USDT Balance</div>
+    <div class="card-value yellow" id="balance">—</div>
+    <div class="card-sub">Available in spot</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Today's PnL</div>
+    <div class="card-value" id="today-pnl">—</div>
+    <div class="card-sub" id="today-pnl-sub"></div>
+  </div>
+  <div class="card">
+    <div class="card-label">Open Positions</div>
+    <div class="card-value" id="open-count">—</div>
+    <div class="card-sub" id="open-sub">Max 3 allowed</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Last Scan</div>
+    <div class="card-value" id="last-scan" style="font-size:16px;">—</div>
+    <div class="card-sub" id="last-scan-count"></div>
+  </div>
+</div>
+
+<!-- Positions + Signals -->
+<div class="two-col" style="margin-top:20px;">
+  <div>
+    <section style="padding:0;">
+      <h2>Open Positions</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Coin</th>
+            <th>Entry</th>
+            <th>Current</th>
+            <th>PnL</th>
+            <th>Stop / Target</th>
+            <th>Mode</th>
+          </tr>
+        </thead>
+        <tbody id="positions-body">
+          <tr><td colspan="6" class="empty">No open positions</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <div>
+    <section style="padding:0;">
+      <h2>Recent Signals</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Coin</th>
+            <th>Score</th>
+            <th>24h</th>
+            <th>RSI</th>
+            <th>Signals</th>
+          </tr>
+        </thead>
+        <tbody id="signals-body">
+          <tr><td colspan="5" class="empty">Waiting for next scan...</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</div>
+
+<!-- Trade History -->
+<section>
+  <h2>Trade History</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Coin</th>
+        <th>Entry</th>
+        <th>Exit</th>
+        <th>PnL (USDT)</th>
+        <th>PnL %</th>
+        <th>Reason</th>
+        <th>Closed</th>
+        <th>Mode</th>
+      </tr>
+    </thead>
+    <tbody id="history-body">
+      <tr><td colspan="8" class="empty">No trades yet</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- Settings -->
+<section>
+  <h2>Bot Settings</h2>
+  <table>
+    <thead>
+      <tr><th>Setting</th><th>Value</th></tr>
+    </thead>
+    <tbody id="settings-body"></tbody>
+  </table>
+</section>
+
+<div class="refresh-info">Auto-refreshes every 30 seconds &nbsp;|&nbsp; <span id="next-refresh"></span></div>
+
+<script>
+let countdown = 30;
+
+function tagClass(signal) {
+  const map = {
+    'MAJOR_DIP': 'tag-dip', 'DIP': 'tag-dip', 'SHARP_DROP_1H': 'tag-dip',
+    'OVERSOLD': 'tag-oversold',
+    'VOLUME_SURGE': 'tag-volume',
+    'MACD_CROSSOVER': 'tag-macd',
+    'EMA_CROSS': 'tag-ema',
+    'BELOW_BB_LOWER': 'tag-bb',
+  };
+  return map[signal] || 'tag-default';
+}
+
+function scoreColor(s) {
+  if (s >= 60) return '#0ecb81';
+  if (s >= 35) return '#f0b90b';
+  return '#7b9ef6';
+}
+
+function pnlColor(v) { return v >= 0 ? 'green' : 'red'; }
+
+function fmt(n, d=2) { return n != null ? Number(n).toFixed(d) : '—'; }
+
+async function refresh() {
+  try {
+    const [status, history, signals] = await Promise.all([
+      fetch('/api/status').then(r => r.json()),
+      fetch('/api/history').then(r => r.json()),
+      fetch('/api/signals').then(r => r.json()),
+    ]);
+
+    // Header badge
+    const badge = document.getElementById('mode-badge');
+    const bot = status.bot;
+    if (!bot.running) {
+      badge.textContent = 'Bot Idle';
+      badge.className = 'badge badge-idle';
+    } else if (bot.dry_run) {
+      badge.textContent = 'DRY RUN';
+      badge.className = 'badge badge-dry';
+    } else {
+      badge.textContent = 'LIVE TRADING';
+      badge.className = 'badge badge-live';
+    }
+    document.getElementById('last-update').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+    // Stats
+    const bal = status.balance_usdt;
+    document.getElementById('balance').textContent = bal != null ? '$' + fmt(bal) : '—';
+
+    const pnl = status.today_pnl;
+    const pnlEl = document.getElementById('today-pnl');
+    pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + fmt(pnl);
+    pnlEl.className = 'card-value ' + pnlColor(pnl);
+    if (status.starting_balance > 0) {
+      const pct = (pnl / status.starting_balance * 100).toFixed(2);
+      document.getElementById('today-pnl-sub').textContent = (pct >= 0 ? '+' : '') + pct + '% from start of day';
+    }
+
+    const pos = status.positions;
+    document.getElementById('open-count').textContent = pos.length + ' / ' + status.settings.max_positions;
+    document.getElementById('open-count').className = 'card-value ' + (pos.length > 0 ? 'yellow' : 'gray');
+
+    if (bot.last_scan) {
+      const d = new Date(bot.last_scan);
+      document.getElementById('last-scan').textContent = d.toLocaleTimeString();
+      document.getElementById('last-scan-count').textContent = (bot.last_scan_count || 0) + ' signals found';
+    }
+
+    // Positions table
+    const pb = document.getElementById('positions-body');
+    if (pos.length === 0) {
+      pb.innerHTML = '<tr><td colspan="6" class="empty">No open positions</td></tr>';
+    } else {
+      pb.innerHTML = pos.map(p => `
+        <tr>
+          <td><strong>${p.symbol.replace('USDT','')}</strong><span class="gray">/USDT</span></td>
+          <td>$${fmt(p.entry_price, 6)}</td>
+          <td>$${fmt(p.current_price, 6)}</td>
+          <td class="${pnlColor(p.pnl_usdt)}">
+            ${p.pnl_usdt >= 0 ? '+' : ''}$${fmt(p.pnl_usdt)}<br>
+            <span style="font-size:11px">${p.pnl_pct >= 0 ? '+' : ''}${fmt(p.pnl_pct)}%</span>
+          </td>
+          <td style="font-size:12px;">
+            <span class="red">SL $${fmt(p.stop_loss,6)}</span><br>
+            <span class="green">TP $${fmt(p.take_profit,6)}</span>
+          </td>
+          <td>${p.dry_run ? '<span class="yellow">DRY</span>' : '<span class="green">LIVE</span>'}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Signals table
+    const sb = document.getElementById('signals-body');
+    if (!signals || signals.length === 0) {
+      sb.innerHTML = '<tr><td colspan="5" class="empty">Waiting for next scan...</td></tr>';
+    } else {
+      sb.innerHTML = signals.map(s => `
+        <tr>
+          <td><strong>${s.symbol.replace('USDT','')}</strong></td>
+          <td>
+            <span style="color:${scoreColor(s.score)};font-weight:700">${s.score}</span>
+            <span class="score-bar-wrap"><span class="score-bar" style="width:${s.score}%;background:${scoreColor(s.score)}"></span></span>
+          </td>
+          <td class="${s.change_24h >= 0 ? 'green' : 'red'}">${fmt(s.change_24h, 1)}%</td>
+          <td class="${s.rsi_1h < 30 ? 'green' : s.rsi_1h < 45 ? 'yellow' : 'gray'}">${fmt(s.rsi_1h, 1)}</td>
+          <td>${(s.signal_types || []).map(t => `<span class="tag ${tagClass(t)}">${t.replace('_',' ')}</span>`).join('')}</td>
+        </tr>
+      `).join('');
+    }
+
+    // History table
+    const hb = document.getElementById('history-body');
+    if (!history || history.length === 0) {
+      hb.innerHTML = '<tr><td colspan="8" class="empty">No trades yet</td></tr>';
+    } else {
+      hb.innerHTML = history.map(t => `
+        <tr>
+          <td><strong>${t.symbol.replace('USDT','')}</strong></td>
+          <td>$${fmt(t.entry_price,6)}</td>
+          <td>$${fmt(t.exit_price,6)}</td>
+          <td class="${pnlColor(t.pnl_usdt)}">${t.pnl_usdt >= 0 ? '+' : ''}$${fmt(t.pnl_usdt)}</td>
+          <td class="${pnlColor(t.pnl_pct)}">${t.pnl_pct >= 0 ? '+' : ''}${fmt(t.pnl_pct)}%</td>
+          <td style="font-size:12px;color:#848e9c">${t.reason}</td>
+          <td style="font-size:12px;color:#848e9c">${t.closed_at ? t.closed_at.slice(0,16).replace('T',' ') : '—'}</td>
+          <td>${t.dry_run ? '<span class="yellow">DRY</span>' : '<span class="green">LIVE</span>'}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Settings
+    const s = status.settings;
+    const rows = [
+      ['Mode',          s.dry_run ? '<span class="yellow">DRY RUN (simulated)</span>' : '<span class="green">LIVE (real money)</span>'],
+      ['Min Buy Score', s.min_score + ' / 100'],
+      ['Max Positions', s.max_positions],
+      ['Stop Loss',     '<span class="red">' + s.stop_loss_pct + '%</span>'],
+      ['Take Profit',   '<span class="green">+' + s.take_profit_pct + '%</span>'],
+      ['Scan Every',    (s.scan_interval / 60) + ' minutes'],
+    ];
+    document.getElementById('settings-body').innerHTML = rows.map(r =>
+      `<tr><td style="color:#848e9c;width:200px">${r[0]}</td><td>${r[1]}</td></tr>`
+    ).join('');
+
+  } catch(e) {
+    console.error('Refresh error:', e);
+  }
+}
+
+// Countdown timer
+setInterval(() => {
+  countdown--;
+  if (countdown <= 0) {
+    countdown = 30;
+    refresh();
+  }
+  document.getElementById('next-refresh').textContent = 'Next refresh in ' + countdown + 's';
+}, 1000);
+
+// Initial load
+refresh();
+</script>
+</body>
+</html>
