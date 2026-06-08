@@ -1,23 +1,61 @@
 import time
 import requests
 import pandas as pd
-from bot.config import BINANCE_API_KEY, BINANCE_SECRET_KEY
+from bot.config import BINANCE_API_KEY
 
 BASE_URL = "https://api.binance.com"
+
+# Cached at startup — refreshed every 6 hours
+_active_spot_pairs: set[str] = set()
+_pairs_fetched_at: float = 0
+_PAIRS_TTL = 6 * 3600
 
 
 def _get(endpoint: str, params: dict = None) -> dict | list:
     url = f"{BASE_URL}{endpoint}"
     headers = {"X-MBX-APIKEY": BINANCE_API_KEY} if BINANCE_API_KEY else {}
-    resp = requests.get(url, params=params, headers=headers, timeout=10)
+    resp = requests.get(url, params=params, headers=headers, timeout=15)
     resp.raise_for_status()
     return resp.json()
 
 
+def get_active_spot_pairs() -> set[str]:
+    """
+    Returns the set of USDT pairs currently in TRADING status on Binance spot.
+    Cached for 6 hours to avoid hammering the endpoint.
+    """
+    global _active_spot_pairs, _pairs_fetched_at
+    if _active_spot_pairs and (time.time() - _pairs_fetched_at) < _PAIRS_TTL:
+        return _active_spot_pairs
+
+    data = _get("/api/v3/exchangeInfo")
+    pairs = set()
+    for s in data["symbols"]:
+        if (
+            s["quoteAsset"] == "USDT"
+            and s["status"] == "TRADING"
+            and s["isSpotTradingAllowed"]
+            and not s["symbol"].endswith("DOWNUSDT")
+            and not s["symbol"].endswith("UPUSDT")
+            and not s["symbol"].endswith("BULLUSDT")
+            and not s["symbol"].endswith("BEARUSDT")
+        ):
+            pairs.add(s["symbol"])
+
+    _active_spot_pairs = pairs
+    _pairs_fetched_at = time.time()
+    print(f"  [Exchange] {len(pairs)} active USDT spot pairs loaded from Binance")
+    return pairs
+
+
 def get_all_usdt_tickers() -> list[dict]:
-    """Fetch 24h stats for every *USDT spot pair."""
+    """
+    Fetch 24h stats for USDT pairs, pre-filtered to only currently
+    active spot-tradeable symbols verified against exchangeInfo.
+    """
+    active = get_active_spot_pairs()
     data = _get("/api/v3/ticker/24hr")
-    return [t for t in data if t["symbol"].endswith("USDT") and not t["symbol"].endswith("DOWNUSDT") and not t["symbol"].endswith("UPUSDT")]
+    return [t for t in data if t["symbol"] in active]
 
 
 def get_klines(symbol: str, interval: str, limit: int = 100) -> pd.DataFrame:
@@ -45,16 +83,3 @@ def get_1h_change(symbol: str) -> float:
         return ((curr_close - prev_close) / prev_close) * 100
     except Exception:
         return 0.0
-
-
-def get_exchange_info() -> set[str]:
-    """Return set of all active USDT spot trading pairs."""
-    data = _get("/api/v3/exchangeInfo")
-    return {
-        s["symbol"]
-        for s in data["symbols"]
-        if s["quoteAsset"] == "USDT"
-        and s["status"] == "TRADING"
-        and not s["symbol"].endswith("DOWNUSDT")
-        and not s["symbol"].endswith("UPUSDT")
-    }
