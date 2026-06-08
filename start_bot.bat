@@ -1,17 +1,11 @@
 @echo off
-title Crypto Opportunity Bot
+title Crypto Bot — Dry Run Auto-Trade
 color 0A
 echo ========================================
-echo   Crypto SPOT Opportunity Bot
+echo   Crypto Bot — Auto-Trade (DRY RUN)
+echo   Simulates trades. No real money.
 echo ========================================
 echo.
-
 cd /d "%~dp0"
-
-echo Starting continuous scan (every 5 minutes)...
-echo Press Ctrl+C to stop.
-echo.
-
-python main.py
-
+python main.py --trade
 pause
